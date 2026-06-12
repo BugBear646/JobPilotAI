@@ -1,150 +1,199 @@
-import time
+from backend.utils.logger import get_logger
+
+from browser.navigator import Navigator
+from browser.upload import ResumeUploader
+from browser.form_filler import FormFiller
+
+logger = get_logger()
 
 
 class JobApplier:
+    """
+    Handles the complete Easy Apply workflow.
 
-    def __init__(self, page):
+    Flow:
 
+    Open Job
+        ↓
+    Click Easy Apply
+        ↓
+    Upload Resume (if needed)
+        ↓
+    Fill Form
+        ↓
+    Next
+        ↓
+    Fill Form
+        ↓
+    Review
+        ↓
+    Submit
+        ↓
+    Close Popup
+    """
+
+    def __init__(self, page, profile, resume_path=None):
         self.page = page
+        self.profile = profile
+        self.resume_path = resume_path
+
+        self.navigator = Navigator(page)
+        self.uploader = ResumeUploader(
+            page,
+            resume_path=resume_path,
+        )
+        self.form_filler = FormFiller(
+            page,
+            profile,
+        )
 
     def open_job(self, job):
 
-        try:
+        url = job.get("url")
 
-            print("=" * 60)
-            print(f"Opening Job : {job['job_id']}")
-            print("=" * 60)
-
-            job["element"].scroll_into_view_if_needed()
-
-            time.sleep(1)
-
-            job["element"].click(
-                timeout=5000,
-                force=True,
-            )
-
-            self._wait_for_details()
-
-            easy_apply = self.has_easy_apply()
-
-            if easy_apply:
-
-                print("Easy Apply : YES\n")
-
-            else:
-
-                print("Easy Apply : NO\n")
-
-            return easy_apply
-
-        except Exception as e:
-
-            print(f"Failed to open job: {e}\n")
-
+        if not url:
+            logger.info("Job URL missing.")
             return False
 
-    def has_easy_apply(self):
+        logger.info(f"Opening Job: {url}")
 
-        selectors = [
+        self.page.goto(
+            url,
+            wait_until="domcontentloaded",
+            timeout=60000,
+        )
 
-            "button.jobs-apply-button",
+        self.page.wait_for_timeout(3000)
 
-            "button[aria-label*='Easy Apply']",
-
-            "button:has-text('Easy Apply')",
-
-            ".jobs-apply-button",
-
-        ]
-
-        for selector in selectors:
-
-            try:
-
-                locator = self.page.locator(selector)
-
-                if locator.count() > 0:
-
-                    if locator.first.is_visible():
-
-                        return True
-
-            except Exception:
-
-                pass
-
-        return False
+        return True
 
     def click_easy_apply(self):
 
         selectors = [
-
-            "button.jobs-apply-button",
-
-            "button[aria-label*='Easy Apply']",
-
             "button:has-text('Easy Apply')",
-
-            ".jobs-apply-button",
-
+            "button.jobs-apply-button",
+            "[aria-label*='Easy Apply']",
         ]
 
         for selector in selectors:
 
             try:
 
-                locator = self.page.locator(selector)
+                button = self.page.locator(selector).first
 
-                if locator.count() == 0:
+                if button.count() == 0:
                     continue
 
-                button = locator.first
+                if button.is_visible():
 
-                if not button.is_visible():
-                    continue
+                    logger.info(
+                        "Easy Apply button found."
+                    )
 
-                print("Clicking Easy Apply...\n")
+                    button.click()
 
-                button.click()
+                    self.page.wait_for_timeout(3000)
 
-                time.sleep(2)
-
-                return True
+                    return True
 
             except Exception:
+                pass
 
-                continue
+        logger.info(
+            "Easy Apply button not found."
+        )
 
         return False
 
-    def _wait_for_details(self):
+    def close_popup(self):
 
         selectors = [
-
-            ".jobs-search__job-details",
-
-            ".jobs-details",
-
-            ".jobs-unified-top-card",
-
-            ".job-details-jobs-unified-top-card",
-
+            "button[aria-label='Dismiss']",
+            "button[aria-label='Close']",
+            "button.artdeco-modal__dismiss",
         ]
 
         for selector in selectors:
 
             try:
 
-                self.page.wait_for_selector(
-                    selector,
-                    timeout=5000,
-                )
+                button = self.page.locator(selector).first
 
-                return
+                if button.count() == 0:
+                    continue
+
+                if button.is_visible():
+
+                    button.click()
+
+                    self.page.wait_for_timeout(1000)
+
+                    logger.info(
+                        "Popup closed."
+                    )
+
+                    return
 
             except Exception:
-
                 pass
 
-        time.sleep(2)
+    def apply(self, job):
+
+        logger.info(
+            "=================================="
+        )
+        logger.info(
+            f"Applying: {job.get('company','')} | {job.get('title','')}"
+        )
+        logger.info(
+            "=================================="
+        )
+
+        if not self.open_job(job):
+            return False
+
+        if not self.click_easy_apply():
+            logger.info(
+                "Skipping (No Easy Apply)."
+            )
+            return False
+
+        self.uploader.upload()
+
+        safety_counter = 0
+
+        while safety_counter < 15:
+
+            safety_counter += 1
+
+            self.form_filler.fill()
+
+            status = self.navigator.process()
+
+            if status == "submitted":
+
+                logger.info(
+                    "Application submitted."
+                )
+
+                self.close_popup()
+
+                return True
+
+            if status == "stopped":
+
+                logger.info(
+                    "Workflow stopped."
+                )
+
+                self.close_popup()
+
+                return False
+
+        logger.info(
+            "Exceeded maximum navigation steps."
+        )
+
+        self.close_popup()
+
+        return False
