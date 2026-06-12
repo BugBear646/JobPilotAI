@@ -1,73 +1,106 @@
+"""
+==================================================
+JobPilotAI Login Manager
+==================================================
+
+Responsibilities:
+
+- Open LinkedIn
+- Detect existing login
+- Wait for manual login if required
+- Return only after login succeeds
+
+==================================================
+"""
+
 import time
 
-
-LOGIN_TIMEOUT = 600  # 10 minutes
-
-
-def is_logged_in(page):
-    """
-    Returns True if the user is logged into LinkedIn.
-    """
-
-    try:
-
-        url = page.url.lower()
-
-        if "feed" in url:
-            return True
-
-        if "jobs" in url:
-            return True
-
-        if page.locator("input[placeholder='Search']").count() > 0:
-            return True
-
-        if page.locator("nav").count() > 0:
-            return True
-
-    except Exception:
-        pass
-
-    return False
+from config.settings import (
+    LINKEDIN_HOME,
+)
 
 
-def login(page):
-    """
-    Opens LinkedIn and waits until login is completed.
-    """
+class LoginManager:
 
-    print("=" * 50)
-    print("LinkedIn Login")
-    print("=" * 50)
+    def __init__(self, page):
 
-    page.goto(
-        "https://www.linkedin.com/",
-        wait_until="domcontentloaded",
-    )
+        self.page = page
 
-    page.wait_for_timeout(2000)
+    def login(self):
 
-    if is_logged_in(page):
+        print("\n====================================")
+        print("Opening LinkedIn...")
+        print("====================================\n")
 
-        print("\nAlready logged in.\n")
-        return
+        self.page.goto(
+            LINKEDIN_HOME,
+            wait_until="domcontentloaded",
+        )
 
-    print("\nPlease login in the opened browser.\n")
-    print("Waiting for login...\n")
+        self.page.wait_for_timeout(3000)
 
-    start = time.time()
+        if self.is_logged_in():
 
-    while True:
+            print("✅ Existing session detected.\n")
 
-        if is_logged_in(page):
-
-            print("Login detected!\n")
             return
 
-        if time.time() - start > LOGIN_TIMEOUT:
+        print("====================================")
+        print("Please login to LinkedIn.")
+        print("Automation will continue automatically.")
+        print("====================================\n")
 
-            raise Exception(
-                "Login timeout. Please restart and login again."
-            )
+        while True:
 
-        time.sleep(2)
+            if self.is_logged_in():
+
+                print("\n✅ Login detected!\n")
+
+                break
+
+            time.sleep(2)
+
+    def is_logged_in(self):
+
+        current_url = self.page.url.lower()
+
+        if "feed" in current_url:
+            return True
+
+        try:
+
+            if self.page.locator(
+                "input[placeholder='Search']"
+            ).count() > 0:
+
+                return True
+
+        except:
+
+            pass
+
+        try:
+
+            if self.page.locator(
+                "input[placeholder='Search by title, skill, or company']"
+            ).count() > 0:
+
+                return True
+
+        except:
+
+            pass
+
+        try:
+
+            if self.page.locator(
+                "nav"
+            ).count() > 0 and "login" not in current_url:
+
+                return True
+
+        except:
+
+            pass
+
+        return False
