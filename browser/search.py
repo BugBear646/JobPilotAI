@@ -1,73 +1,116 @@
-import time
+"""
+==================================================
+JobPilotAI Search Manager
+==================================================
+
+Responsibilities
+
+- Ask user for target role(s)
+- Ask user for preferred location
+- Ask user for maximum applications
+- Build LinkedIn Easy Apply search URL
+- Open search page
+
+==================================================
+"""
+
+from urllib.parse import quote_plus
+
+from config.settings import LINKEDIN_JOBS
+from config.constants import MAX_APPLICATIONS
 
 
-LOGIN_TIMEOUT = 600  # 10 minutes
+class SearchManager:
 
+    def __init__(self, page):
 
-def is_logged_in(page):
-    """
-    Returns True if the user is logged into LinkedIn.
-    """
+        self.page = page
 
-    try:
+    def get_user_preferences(self):
 
-        url = page.url.lower()
+        print("\n======================================")
+        print("        JobPilotAI Configuration")
+        print("======================================\n")
 
-        if "feed" in url:
-            return True
+        while True:
 
-        if "jobs" in url:
-            return True
+            roles = input(
+                "Target Role(s)\n"
+                "(comma separated)\n\n> "
+            ).strip()
 
-        if page.locator("input[placeholder='Search']").count() > 0:
-            return True
+            if roles:
+                break
 
-        if page.locator("nav").count() > 0:
-            return True
+            print("\nRole is mandatory.\n")
 
-    except Exception:
-        pass
+        while True:
 
-    return False
+            location = input(
+                "\nPreferred Location\n\n> "
+            ).strip()
 
+            if location:
+                break
 
-def login(page):
-    """
-    Opens LinkedIn and waits until login is completed.
-    """
+            print("\nLocation is mandatory.\n")
 
-    print("=" * 50)
-    print("LinkedIn Login")
-    print("=" * 50)
+        while True:
 
-    page.goto(
-        "https://www.linkedin.com/",
-        wait_until="domcontentloaded",
-    )
+            value = input(
+                f"\nMaximum Applications (1-{MAX_APPLICATIONS})\n\n> "
+            ).strip()
 
-    page.wait_for_timeout(2000)
+            try:
 
-    if is_logged_in(page):
+                value = int(value)
 
-        print("\nAlready logged in.\n")
-        return
+                if value < 1:
+                    raise ValueError
 
-    print("\nPlease login in the opened browser.\n")
-    print("Waiting for login...\n")
+                if value > MAX_APPLICATIONS:
 
-    start = time.time()
+                    print(
+                        f"\nMaximum allowed is {MAX_APPLICATIONS}. "
+                        f"Using {MAX_APPLICATIONS}.\n"
+                    )
 
-    while True:
+                    value = MAX_APPLICATIONS
 
-        if is_logged_in(page):
+                break
 
-            print("Login detected!\n")
-            return
+            except:
 
-        if time.time() - start > LOGIN_TIMEOUT:
+                print("\nPlease enter a valid number.\n")
 
-            raise Exception(
-                "Login timeout. Please restart and login again."
-            )
+        return {
+            "roles": roles,
+            "location": location,
+            "max_applications": value,
+        }
 
-        time.sleep(2)
+    def open_search(self, roles, location):
+
+        keywords = quote_plus(roles)
+
+        location = quote_plus(location)
+
+        url = (
+            f"{LINKEDIN_JOBS}/search/"
+            f"?f_AL=true"
+            f"&keywords={keywords}"
+            f"&location={location}"
+        )
+
+        print("\n======================================")
+        print("Opening LinkedIn Search")
+        print("======================================")
+        print(url)
+        print()
+
+        self.page.goto(
+            url,
+            wait_until="domcontentloaded",
+        )
+
+        self.page.wait_for_timeout(5000)
