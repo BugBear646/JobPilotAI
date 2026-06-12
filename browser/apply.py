@@ -1,124 +1,115 @@
-from browser.browser import BrowserManager
-from browser.login import login
-from browser.search import LinkedInSearch
+from backend.utils.logger import get_logger
+
+from browser.collector import JobCollector
+from browser.apply_job import JobApplier
+
+logger = get_logger()
 
 
-class JobApplyAgent:
+class ApplyEngine:
 
-    def __init__(self, config):
+    def __init__(
+        self,
+        page,
+        profile,
+        resume_path=None,
+        max_applications=10,
+    ):
+        self.page = page
+        self.profile = profile
+        self.resume_path = resume_path
+        self.max_applications = max_applications
 
-        self.config = config
+    def start(self):
 
-        self.browser = None
-        self.page = None
+        logger.info("")
+        logger.info("=" * 80)
+        logger.info("Collecting jobs...")
+        logger.info("=" * 80)
 
-        self.search_engine = None
-
-        self.jobs = []
-
-    def start_browser(self):
-
-        print("\nLaunching browser...\n")
-
-        self.browser = BrowserManager()
-
-        self.page = self.browser.start()
-
-        self.search_engine = LinkedInSearch(self.page)
-
-    def login(self):
-
-        print("Waiting for LinkedIn login...\n")
-
-        login(self.page)
-
-        print("\nLogin successful.\n")
-
-    def search(self):
-
-        print("Opening search...\n")
-
-        if self.config["mode"] == "url":
-
-            self.search_engine.open_url(
-                self.config["search_url"]
-            )
-
-        else:
-
-            self.search_engine.search(
-                keyword=self.config["role"],
-                location=self.config["location"],
-            )
-
-    def collect_jobs(self):
-
-        print("\nCollecting jobs...\n")
-
-        from browser.collector import JobCollector
         collector = JobCollector(self.page)
-        
-        self.jobs = collector.collect(
-            max_jobs=self.config["max_applications"]
+
+        jobs = collector.collect()
+
+        logger.info(f"Collected {len(jobs)} jobs.")
+
+        if len(jobs) == 0:
+            logger.info("No jobs found.")
+            return
+
+        applier = JobApplier(
+            page=self.page,
+            profile=self.profile,
+            resume_path=self.resume_path,
         )
-
-        print(
-            f"\nCollected {len(self.jobs)} jobs.\n"
-        )
-
-    def apply(self):
-
-        print("\nStarting applications...\n")
 
         applied = 0
+        skipped = 0
+        failed = 0
 
-        for job in self.jobs:
+        for index, job in enumerate(jobs):
 
-            if applied >= self.config["max_applications"]:
+            if applied >= self.max_applications:
+                logger.info("")
+                logger.info(
+                    f"Reached limit of {self.max_applications} applications."
+                )
                 break
 
-            print("--------------------------------")
-            print(job)
-            print("--------------------------------")
+            logger.info("")
+            logger.info("=" * 80)
+            logger.info(
+                f"Processing Job {index + 1}/{len(jobs)}"
+            )
+            logger.info("=" * 80)
 
-            #
-            # browser/apply_job.py
-            #
+            logger.info(
+                f"Company : {job.get('company','')}"
+            )
+            logger.info(
+                f"Title    : {job.get('title','')}"
+            )
 
-            applied += 1
+            try:
 
-        print(
-            f"\nApplications attempted : {applied}\n"
+                success = applier.apply(job)
+
+                if success:
+                    applied += 1
+                    logger.info(
+                        "Status : APPLIED"
+                    )
+                else:
+                    skipped += 1
+                    logger.info(
+                        "Status : SKIPPED"
+                    )
+
+            except Exception as e:
+
+                failed += 1
+
+                logger.exception(e)
+
+                logger.info(
+                    "Status : FAILED"
+                )
+
+        logger.info("")
+        logger.info("=" * 80)
+        logger.info("SUMMARY")
+        logger.info("=" * 80)
+
+        logger.info(
+            f"Applied : {applied}"
         )
 
-    def summary(self):
+        logger.info(
+            f"Skipped : {skipped}"
+        )
 
-        print("\n================================")
-        print("Automation Complete")
-        print("================================\n")
+        logger.info(
+            f"Failed  : {failed}"
+        )
 
-    def shutdown(self):
-
-        if self.browser:
-
-            self.browser.stop()
-
-    def run(self):
-
-        try:
-
-            self.start_browser()
-
-            self.login()
-
-            self.search()
-
-            self.collect_jobs()
-
-            self.apply()
-
-            self.summary()
-
-        finally:
-
-            self.shutdown()
+        logger.info("=" * 80)
