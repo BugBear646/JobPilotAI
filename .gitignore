@@ -1,57 +1,68 @@
+# ==========================
 # Python
+# ==========================
 __pycache__/
 *.py[cod]
-*.pyo
-*.pyd
+*$py.class
+*.so
 
+# ==========================
 # Virtual Environment
+# ==========================
 venv/
 .env
+.env.local
 
+# ==========================
 # macOS
+# ==========================
 .DS_Store
 
+# ==========================
 # IDE
+# ==========================
 .vscode/
 .idea/
 
+# ==========================
 # Logs
+# ==========================
+logs/*
+!logs/.gitkeep
 *.log
 
+# ==========================
 # Database
+# ==========================
 *.db
-*.sqlite
 *.sqlite3
 
-# Playwright / Browser
-playwright-report/
-test-results/
-
-# Browser Profile
-storage/browser_profile/
-storage/*.json
-storage/*.lock
-
-# Cache
-.cache/
-.pytest_cache/
-
-# Build
-dist/
-build/
-*.egg-info/
-
-# Environment
-.env.local
-.env.production
-
-# Coverage
-.coverage
-htmlcov/
+# ==========================
+# Browser Storage
+# ==========================
 storage/browser_profile/
 storage/cache/
 storage/downloads/
 storage/screenshots/
-*.db
-__pycache__/
-.DS_Store
+
+# ==========================
+# Temporary Files
+# ==========================
+*.tmp
+*.temp
+
+# ==========================
+# Testing
+# ==========================
+.pytest_cache/
+
+# ==========================
+# Build
+# ==========================
+dist/
+build/
+
+# ==========================
+# Misc
+# ==========================
+project_structure.txt
