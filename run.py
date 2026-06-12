@@ -2,44 +2,55 @@ from browser.linkedin import LinkedInAgent
 
 
 def main():
+
     agent = LinkedInAgent()
 
     try:
-        # Start browser
+
         agent.start()
 
-        # Open LinkedIn login page
         agent.open()
 
-        # Wait until login is completed
         agent.wait_for_login()
 
-        print("\n===================================")
-        print("Searching for jobs...")
-        print("Keyword : Product Manager")
-        print("Location: India")
-        print("===================================\n")
+        print(
+            "\nSearching Easy Apply jobs...\n"
+        )
 
-        # Search jobs
         agent.search(
             keyword="Product Manager",
             location="India",
         )
 
-        # Debug information
-        print("\nNavigation successful!")
-        print(f"Current URL  : {agent.page.url}")
-        print(f"Page Title   : {agent.page.title()}")
+        job_ids = agent.collect_jobs(
+            limit=200
+        )
 
-        input("\nPress ENTER to close browser...")
+        print()
 
-    except Exception as e:
-        print("\n===================================")
-        print("ERROR")
-        print("===================================")
-        print(e)
+        print("=" * 80)
+
+        print(
+            f"Collected {len(job_ids)} jobs"
+        )
+
+        print("=" * 80)
+
+        for i, job in enumerate(
+            job_ids,
+            1,
+        ):
+
+            print(
+                f"{i}. {job}"
+            )
 
     finally:
+
+        input(
+            "\nPress ENTER to close browser..."
+        )
+
         agent.stop()
 
 
