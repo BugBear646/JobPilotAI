@@ -1,101 +1,93 @@
-"""
-==================================================
-Job Iterator
-
-Responsibilities
-
-- Read all visible job cards
-- Click each job card
-- Wait for right panel to load
-- Check if Easy Apply exists
-- Return valid jobs
-
-==================================================
-"""
-
-from backend.utils.logger import get_logger
-
-logger = get_logger()
+from time import sleep
+from playwright.sync_api import Page
 
 
-class JobIterator:
+class JobCrawler:
 
-    def __init__(self, page):
-
+    def __init__(self, page: Page):
         self.page = page
+        self.visited = set()
 
-    def get_job_cards(self):
+    def load_all_jobs(self, target=50):
+        """
+        Scroll the LEFT jobs panel until we collect target jobs
+        or LinkedIn stops loading more.
+        """
 
-        selectors = [
-            "div.scaffold-layout__list li",
-            "ul.jobs-search__results-list li",
-            "li.jobs-search-results__list-item",
-        ]
+        print("\nCollecting jobs...\n")
 
-        for selector in selectors:
+        sidebar = self.page.locator("div.scaffold-layout__list")
 
-            try:
+        previous_count = 0
+        stagnant = 0
 
-                self.page.wait_for_selector(
-                    selector,
-                    timeout=5000,
-                )
+        while True:
 
-                cards = self.page.locator(selector)
+            cards = self.page.locator(
+                "li[data-occludable-job-id]"
+            )
 
-                count = cards.count()
+            count = cards.count()
 
-                if count > 0:
+            for i in range(count):
 
-                    logger.info(
-                        f"Found {count} job cards."
+                try:
+                    card = cards.nth(i)
+
+                    job_id = card.get_attribute(
+                        "data-occludable-job-id"
                     )
 
-                    return cards
+                    if job_id:
+                        self.visited.add(job_id)
 
-            except Exception:
+                except:
+                    pass
 
-                continue
+            print(
+                f"Collected {len(self.visited)} jobs"
+            )
 
-        return None
+            if len(self.visited) >= target:
+                break
 
-    def iterate(self, limit):
+            if len(self.visited) == previous_count:
+                stagnant += 1
+            else:
+                stagnant = 0
 
-        cards = self.get_job_cards()
+            if stagnant >= 4:
+                break
 
-        if cards is None:
+            previous_count = len(self.visited)
 
-            logger.info("No jobs found.")
+            sidebar.evaluate(
+                "(el)=>el.scrollBy(0,1000)"
+            )
 
-            return
+            sleep(2)
 
-        total = cards.count()
+        return list(self.visited)
 
-        logger.info(
-            f"Processing {min(total, limit)} jobs..."
-        )
+    def visit_jobs(self):
 
-        for i in range(min(total, limit)):
+        jobs = list(self.visited)
 
-            card = cards.nth(i)
+        print(f"\nVisiting {len(jobs)} jobs\n")
 
-            try:
+        for index, job in enumerate(jobs):
 
-                card.scroll_into_view_if_needed()
+            url = f"https://www.linkedin.com/jobs/view/{job}/"
 
-                self.page.wait_for_timeout(1000)
+            print(url)
 
-                card.click()
+            self.page.goto(
+                url,
+                wait_until="domcontentloaded"
+            )
 
-                self.page.wait_for_timeout(3000)
+            sleep(4)
 
-                yield {
-                    "index": i + 1,
-                    "card": card,
-                }
-
-            except Exception as e:
-
-                logger.info(
-                    f"Skipping card {i+1}: {e}"
-                )
+            print(
+                f"Visited {index+1}/{len(jobs)}"
+            )

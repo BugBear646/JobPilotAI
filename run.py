@@ -1,118 +1,112 @@
-"""
-==================================================
-JobPilotAI
+from urllib.parse import quote_plus
+from playwright.sync_api import sync_playwright
 
-Main Entry Point
-
-Flow
-
-1. Start Browser
-2. Login to LinkedIn
-3. Ask User Preferences
-4. Open Easy Apply Search
-5. Iterate through Jobs
-
-==================================================
-"""
-
-from browser.browser import BrowserManager
-from browser.login import LoginManager
-from browser.search import SearchManager
-from browser.jobs import JobIterator
+from browser.login import login
+from browser.jobs import JobCrawler
 
 
-def banner():
+MAX_LIMIT = 50
 
-    print("\n")
-    print("=" * 60)
-    print("                    JobPilotAI")
-    print("=" * 60)
-    print("         LinkedIn Easy Apply Automation")
-    print("=" * 60)
-    print()
+
+def get_inputs():
+
+    print("\n==============================")
+    print(" JobPilotAI ")
+    print("==============================\n")
+
+    role = input(
+        "Target Role (Example: Product Manager): "
+    ).strip()
+
+    while not role:
+        role = input(
+            "Role cannot be empty: "
+        ).strip()
+
+    location = input(
+        "Location (Example: India): "
+    ).strip()
+
+    if not location:
+        location = "India"
+
+    try:
+        maximum = int(
+            input(
+                f"Maximum Applications (1-{MAX_LIMIT}): "
+            )
+        )
+    except:
+        maximum = 20
+
+    maximum = max(1, minimum(maximum, MAX_LIMIT))
+
+    return role, location, maximum
+
+
+def minimum(a, b):
+    return a if a < b else b
+
+
+def build_url(role, location):
+
+    role = quote_plus(role)
+    location = quote_plus(location)
+
+    return (
+        "https://www.linkedin.com/jobs/search/"
+        f"?f_AL=true"
+        f"&keywords={role}"
+        f"&location={location}"
+    )
 
 
 def main():
 
-    banner()
+    role, location, maximum = get_inputs()
 
-    browser = BrowserManager()
+    url = build_url(role, location)
 
-    page = browser.start()
+    print("\n================================")
+    print("Opening LinkedIn Search")
+    print("================================\n")
 
-    try:
+    print(url)
+    print()
 
-        # ----------------------------------------
-        # Login
-        # ----------------------------------------
+    with sync_playwright() as p:
 
-        login = LoginManager(page)
-
-        login.login()
-
-        # ----------------------------------------
-        # User Configuration
-        # ----------------------------------------
-
-        search = SearchManager(page)
-
-        config = search.get_user_preferences()
-
-        print("\n")
-        print("=" * 60)
-        print("Configuration")
-        print("=" * 60)
-        print(f"Roles              : {config['roles']}")
-        print(f"Location           : {config['location']}")
-        print(f"Maximum Apply      : {config['max_applications']}")
-        print("=" * 60)
-        print()
-
-        # ----------------------------------------
-        # Open LinkedIn Search
-        # ----------------------------------------
-
-        search.open_search(
-            config["roles"],
-            config["location"],
+        browser = p.chromium.launch_persistent_context(
+            user_data_dir="storage/browser_profile",
+            headless=False,
         )
 
-        print("\n")
-        print("=" * 60)
-        print("Starting Job Iterator")
-        print("=" * 60)
-        print()
+        page = browser.new_page()
 
-        # ----------------------------------------
-        # Iterate Jobs
-        # ----------------------------------------
+        login(page)
 
-        iterator = JobIterator(page)
-
-        visited = 0
-
-        for job in iterator.iterate(
-            config["max_applications"]
-        ):
-
-            visited += 1
-
-            print(
-                f"Visited Job #{visited}"
-            )
-
-        print("\n")
-        print("=" * 60)
-        print(f"Finished visiting {visited} jobs")
-        print("=" * 60)
-
-        input(
-            "\nPress ENTER to close browser..."
+        page.goto(
+            url,
+            wait_until="domcontentloaded",
         )
 
-    finally:
+        page.wait_for_timeout(5000)
 
-        browser.stop()
+        crawler = JobCrawler(page)
+
+        crawler.load_all_jobs(
+            target=maximum
+        )
+
+        crawler.visit_jobs()
+
+        print("\n================================")
+        print("Finished")
+        print("================================\n")
+
+        input("Press ENTER to exit...")
+
+        browser.close()
 
 
 if __name__ == "__main__":
